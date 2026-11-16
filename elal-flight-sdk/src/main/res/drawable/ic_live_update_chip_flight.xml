@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Status-bar pill icon in flight (Figma ELAL 6944:19247, plane rotated 180° so it flies forward).
+    Filled circle with the plane cut out (evenOdd), because the system tints small icons as a single-colour mask.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="12"
+    android:viewportHeight="12">
+    <group
+        android:pivotX="6"
+        android:pivotY="6"
+        android:rotation="180">
+        <path
+            android:fillColor="@android:color/white"
+            android:fillType="evenOdd"
+            android:pathData="M6,0A6,6 0,1 1,6 12A6,6 0,1 1,6 0Z M6.66752,9.41601C6.60026,9.41601 6.53715,9.38401 6.49806,9.33009L4.56531,6.66385L2.79772,6.66385C2.46557,6.66054 2.19851,6.39352 2.20001,6.06626C2.20016,5.90836 2.26315,5.75682 2.37546,5.64419C2.48665,5.53228 2.63878,5.46904 2.79772,5.46866L4.56531,5.46866L6.49806,2.80243C6.53715,2.7485 6.60026,2.7165 6.66752,2.7165L6.91543,2.7165C7.03044,2.7165 7.12367,2.80836 7.12367,2.92167C7.12367,2.93972 7.12126,2.95768 7.11649,2.9751L6.43387,5.46866L8.08213,5.46866L8.68352,4.6345C8.72258,4.58033 8.78584,4.54815 8.85329,4.54815L8.99176,4.54815C9.10677,4.54815 9.2,4.64001 9.2,4.75332L9.2,7.37919C9.2,7.49251 9.10677,7.58437 8.99176,7.58437L8.88661,7.58437C8.81916,7.58437 8.75589,7.55219 8.71684,7.49801L8.11544,6.66385L6.43387,6.66385L7.11649,9.15741C7.14644,9.26682 7.0807,9.37943 6.96966,9.40894C6.95198,9.41363 6.93375,9.41601 6.91543,9.41601L6.66752,9.41601Z" />
+    </group>
+</vector>

@@ -40,6 +40,13 @@ class FlightMessagingService : FirebaseMessagingService() {
             LiveUpdateManager.restoreFromPrefs(applicationContext, startServiceIfActive = false)
         }
 
+        // A new journey replaces the old one, as in the production FcmService: end the active journey first
+        // instead of letting startJourney fail with ActivityAlreadyRunning.
+        if (event == "start" && LiveUpdateManager.isActive) {
+            log.i("FCM event=start while a journey is active — ending it first")
+            LiveUpdateManager.endJourney(applicationContext)
+        }
+
         val isStart = event == "start" || !LiveUpdateManager.isActive
         val fallback = if (!isStart) LiveUpdateManager.stateFlow.value else null
 

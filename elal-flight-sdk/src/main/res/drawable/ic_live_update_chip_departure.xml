@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Status-bar pill icon before takeoff (Figma ELAL 6944:19137 / 6944:19267, "fontisto:arrow-left" rotated 180°).
+    Small icons are drawn as a single-colour mask that the system tints, so the circle is filled and the arrow is
+    cut out of it (evenOdd): on the pill the arrow shows in the pill's own colour, as in the design.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="12"
+    android:viewportHeight="12">
+    <group
+        android:pivotX="6"
+        android:pivotY="6"
+        android:rotation="180">
+        <path
+            android:fillColor="@android:color/white"
+            android:fillType="evenOdd"
+            android:pathData="M6,0A6,6 0,1 1,6 12A6,6 0,1 1,6 0Z M4.56083,2.863L4.5756,2.86279L4.58053,6.64973L8.18441,3.04585L8.94578,3.80722L5.34147,7.41153L9.12885,7.41603L9.12863,7.4308L7.98979,8.56965L3.42669,8.56537L3.42241,4.00185L4.56083,2.863Z" />
+    </group>
+</vector>

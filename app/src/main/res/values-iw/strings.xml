@@ -27,6 +27,10 @@
 
     <!-- Button labels -->
     <string name="conn_error_button">שגיאת חיבור</string>
+    <string name="delay_toggle_off">הדמיית עיכוב: כבוי</string>
+    <string name="delay_toggle_on">הדמיית עיכוב: פעיל (DELAYED)</string>
+    <string name="demo_pill_text">תווית בשורת המצב: %s</string>
+    <string name="demo_pill_icon_only">תווית בשורת המצב: אייקון בלבד</string>
     <string name="error_button">שגיאה</string>
 
     <!-- Detail texts -->
@@ -51,4 +55,37 @@
     <string name="error_no_active">אין עדכון חי פעיל לשינוי</string>
     <string name="error_notifications_disabled">התראות אינן מופעלות</string>
     <string name="error_failed_to_start">ההפעלה נכשלה: %s</string>
+
+    <!-- Group 4 demo controls -->
+    <string name="demo_dismiss">סגירה (הדמיית החלקה)</string>
+    <string name="demo_promotion_title">Live Updates (קידום)</string>
+    <string name="demo_promotion_allowed">מותר</string>
+    <string name="demo_promotion_blocked">חסום על ידי המשתמש</string>
+    <string name="demo_promotion_notifications_disabled">ההתראות כבויות</string>
+    <string name="demo_promotion_unsupported">לא נתמך (Android 15 ומטה)</string>
+    <string name="demo_open_settings">פתיחת ההגדרות</string>
+    <string name="demo_boarding_pass_placeholder">כרטיס עלייה (מסך דמו)</string>
+    <string name="demo_fallback_off">תצוגה ל-Android 15: כבויה</string>
+    <string name="demo_fallback_on">תצוגה ל-Android 15: פעילה</string>
+
+    <!-- Group 6: language toggle and the sample journeys' server-style labels (HE) -->
+    <string name="demo_language_switch">שפה: עברית (מעבר ל-English)</string>
+    <string name="sample_desk_title">דלפקי צ\'ק-אין:</string>
+    <string name="sample_gate_title">שער:</string>
+    <string name="sample_boarding_soon">העלייה למטוס תחל בקרוב</string>
+    <string name="sample_zone_title">האזור שלך:</string>
+    <string name="sample_last_call_title">לא ניתן לעלות לאחר סגירת השער:</string>
+    <string name="sample_departing_soon">יוצאת בקרוב</string>
+    <string name="sample_estimated_flight_time">זמן טיסה משוער</string>
+    <string name="sample_landing_at">נחיתה ב-%s</string>
+    <string name="sample_landing_soon">נוחתים בקרוב</string>
+    <string name="sample_welcome_to">ברוכים הבאים ל-%s</string>
+    <string name="sample_baggage_carousel">כבודה תגיע לקרוסלה:</string>
+
+    <!-- Group 3b demo controls -->
+    <string name="demo_gate_change">הדמיית החלפת שער</string>
+    <string name="demo_strike_style_span">סגנון שינוי: קו חוצה</string>
+    <string name="demo_strike_style_text">סגנון שינוי: טקסט</string>
+    <string name="demo_status_badge_off">תג סטטוס: כבוי</string>
+    <string name="demo_status_badge_on">תג סטטוס: פעיל</string>
 </resources>

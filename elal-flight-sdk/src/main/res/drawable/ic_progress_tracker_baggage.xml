@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Progress tracker for BAGGAGE: a suitcase.
+    Same frame as ic_airplane_*_left_2 (39x25, circle on the right) so every tracker sits at the same spot.
+    Glyph: Material Icons (Apache 2.0), placeholder until design supplies the El Al icon.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="39dp"
+    android:height="25dp"
+    android:viewportWidth="39"
+    android:viewportHeight="25">
+    <path
+        android:fillColor="@color/live_update_icon_background"
+        android:pathData="M26.986,0L26.986,0A12.014,12.014 0,0 1,39 12.014L39,12.014A12.014,12.014 0,0 1,26.986 24.029L26.986,24.029A12.014,12.014 0,0 1,14.971 12.014L14.971,12.014A12.014,12.014 0,0 1,26.986 0z" />
+    <group
+        android:translateX="19.786"
+        android:translateY="4.814"
+        android:scaleX="0.6"
+        android:scaleY="0.6">
+        <path
+            android:fillColor="@color/live_update_icon_foreground"
+            android:pathData="M20,6h-4L16,4c0,-1.11 -0.89,-2 -2,-2h-4c-1.11,0 -2,0.89 -2,2v2L4,6c-1.11,0 -1.99,0.89 -1.99,2L2,19c0,1.11 0.89,2 2,2h16c1.11,0 2,-0.89 2,-2L22,8c0,-1.11 -0.89,-2 -2,-2zM14,6h-4L10,4h4v2z" />
+    </group>
+</vector>

@@ -16,38 +16,51 @@
     <string name="notif_channel_name">עדכוני טיסה</string>
     <string name="notif_channel_description">עדכונים חיים לטיסה שלך עם אל-על</string>
 
-    <!-- Notification content text (format strings) -->
-    <string name="notif_content_check_in">דלפקי צ\'ק-אין: %s</string>
-    <string name="notif_content_gate_ready">שער: %s</string>
-    <string name="notif_content_boarding">האזור שלך: %s</string>
-    <string name="notif_content_last_call">לא ניתן לעלות לאחר סגירת השער: %s</string>
     <!-- Approximate flight time (appended to the server-sent DEPARTURE_PENDING message) -->
     <string name="notif_flight_time">%1$dh:%2$02dm</string>
-    <string name="notif_content_departed">נחיתה בעוד %1$d שעות %2$d דקות</string>
-    <string name="notif_content_departed_minutes">נחיתה בעוד %1$d דקות</string>
-    <string name="notif_content_landing_soon">נחיתה ברגעים אלה</string>
-    <string name="notif_content_arrival_baggage">כבודה תגיע לקרוסלה: %s</string>
     <string name="notif_content_arrival_welcome">ברוכים הבאים ל-%s</string>
     <string name="notif_content_connection_error">נראה שאתה לא מחובר. בדוק את החיבור שלך.</string>
     <string name="notif_content_general_error">אירעה שגיאה</string>
 
     <!-- Notification chip text -->
-    <string name="notif_chip_check_in">צ\'ק-אין</string>
-    <string name="notif_chip_boarding">עלייה למטוס</string>
-    <string name="notif_chip_departed">בדרך</string>
-    <string name="notif_chip_arrival">נחיתה</string>
-    <string name="notif_chip_connection_error">לא מקוון</string>
+    <string name="notif_chip_connection_error">מנותק</string>
     <string name="notif_chip_general_error">שגיאה</string>
+    <!-- Status-bar pill, max 7 characters after formatting -->
+    <string name="notif_chip_belt">מסוע %1$s</string>
+    <!-- No unit: "11:52 ש׳" would be 8 characters on 10h+ flights. To review with design. -->
+    <string name="notif_chip_duration_hours">%1$d:%2$02d</string>
+    <string name="notif_chip_duration_minutes">%1$d ד׳</string>
 
-    <!-- Notification status bar trailing labels -->
-    <string name="notif_statusbar_check_in">שקילת מטען</string>
-    <string name="notif_statusbar_gate_ready">שער מוכן</string>
-    <string name="notif_statusbar_boarding">עלייה למטוס</string>
-    <string name="notif_statusbar_last_call">קריאה אחרונה</string>
-    <string name="notif_statusbar_departed">בדרך</string>
-    <string name="notif_statusbar_landed">נחיתה</string>
-    <string name="notif_statusbar_baggage">כבודה</string>
-    <string name="notif_statusbar_completed">הסתיים</string>
-    <string name="notif_statusbar_connection_error">שגיאת חיבור</string>
-    <string name="notif_statusbar_general_error">שגיאה</string>
+    <!-- Live Update title / route / lock screen (group 2) -->
+    <string name="notif_title">%1$s · %2$s</string>
+    <!-- RTL: origin on the right, arrow points to the destination -->
+    <string name="notif_subtext_route">%1$s ← %2$s</string>
+    <string name="notif_content_lands_at">נוחתים ב-%s</string>
+    <string name="notif_public_gate">שער %s</string>
+    <string name="notif_public_departs">המראה ב-%s</string>
+    <string name="notif_public_arrives">נחיתה ב-%s</string>
+
+    <!-- Stage title in the notification when the server sends none -->
+    <string name="notif_stage_check_in">צ\'ק-אין</string>
+    <string name="notif_stage_gate_ready">השער מוכן</string>
+    <string name="notif_stage_boarding_pending">העלייה למטוס בקרוב</string>
+    <string name="notif_stage_boarding">עלייה למטוס</string>
+    <string name="notif_stage_last_call">קריאה אחרונה</string>
+    <string name="notif_stage_departure_pending">יוצאת בקרוב</string>
+    <string name="notif_stage_departed">בדרך</string>
+    <string name="notif_stage_landing_soon">נוחתים בקרוב</string>
+    <string name="notif_stage_landed">נחתנו</string>
+    <string name="notif_stage_baggage">איסוף כבודה</string>
+    <string name="notif_stage_completed">הסתיים</string>
+    <string name="notif_stage_connection_error">שגיאת חיבור</string>
+    <string name="notif_stage_general_error">שגיאה</string>
+
+    <!-- Live Update actions (group 4) -->
+    <string name="notif_action_boarding_pass">כרטיס עלייה</string>
+
+    <!-- Schedule changes (group 3b) -->
+    <string name="notif_change_departs">המראה %s</string>
+    <string name="notif_change_values">%1$s %2$s</string>
+    <string name="notif_change_was">%1$s (במקום %2$s)</string>
+    <string name="notif_change_spoken">%1$s, במקום %2$s</string>
 </resources>

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Debug builds only (F6, approved 2026-11-16): export the next-stage receiver so QA can drive the journey with
+        adb shell am broadcast -a com.elal.demoapp.debug.NEXT_STAGE -n com.elal.demoapp/.debug.DebugNextStageReceiver
+    Release builds keep exported="false" from src/main/AndroidManifest.xml.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <application>
+        <receiver
+            android:name=".debug.DebugNextStageReceiver"
+            android:exported="true"
+            tools:replace="android:exported" />
+    </application>
+
+</manifest>

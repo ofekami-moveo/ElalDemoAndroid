@@ -1,5 +1,11 @@
 # El Al Flight Journey — Client Technical Specification
 
+> **Outdated (2026-11-16).** This document describes an earlier state model (`checkIn`, `boardingSoon`,
+> `boardingDelayed`, `takingOff`, …) and layout. It does not match the current Android code. For the current
+> behaviour see `agent-os/specs/2026-11-10-live-update-parity/` — `planning/current-data-contract.md` (FCM payload
+> and `FlightContentState`), `planning/requirements.md` §3 (per-stage rendering) and `spec.md` — and
+> `PROJECT_OVERVIEW.md`. Kept for history; the Phase A port report replaces it for the production app.
+
 ## 1. Overview
 
 ### What We're Building

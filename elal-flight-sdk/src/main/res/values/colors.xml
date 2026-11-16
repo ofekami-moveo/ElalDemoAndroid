@@ -1,4 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="progress_bar_segment">#1B358F</color>
+    <!-- Bar, start/end icons and tracker circles: one blue with ≥3:1 contrast on light, dark and the Samsung lock
+         screen (2026-11-16; navy #1B358F was ~1.1:1 on dark cards). Same in values-night. -->
+    <color name="progress_bar_segment">#4A86F5</color>
+    <!-- Progress bar when the flight is delayed (Figma ELAL 6944:19267 amber). -->
+    <color name="progress_bar_segment_delayed">#FFB936</color>
+    <!-- Status-bar pill (Figma ELAL 6944:19137 on time, 6944:19267 delayed). Passed to setColor(). -->
+    <color name="live_update_chip_on_time">#1B358F</color>
+    <color name="live_update_chip_delayed">#FFB936</color>
+    <!-- Progress bar on CONNECTION_ERROR / GENERAL_ERROR. -->
+    <color name="progress_bar_segment_error">#9AA0A6</color>
+    <!-- Progress tracker icons (check-in, gate, baggage): circle and glyph. -->
+    <color name="live_update_icon_background">#4A86F5</color>
+    <color name="live_update_icon_foreground">#FFFFFF</color>
+    <!-- Status badge (spike, large icon): Figma on-time green, delayed orange, dark text. -->
+    <color name="live_update_status_on_time_background">#1FC5A5</color>
+    <color name="live_update_status_delayed_background">#FF8B33</color>
+    <color name="live_update_status_text">#262626</color>
 </resources>

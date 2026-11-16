@@ -53,6 +53,16 @@ data class FlightContentState(
     val gateTitle: String = "",
     val carouselTitle: String = "",
     @Serializable(with = InstantSerializer::class) val dismissalDate: Instant? = null,
+    // Schedule changes (task 3b, 2026-11-16): demo-only until Phase B, filled by the demo simulator only; the FCM
+    // parser doesn't read them. Same naive airport-local convention as departureTime / arrivalTime. Null = unknown.
+    /** Departure time as originally scheduled. */
+    @Serializable(with = InstantSerializer::class) val scheduledDepartureTime: Instant? = null,
+    /** Departure time now expected; later than [scheduledDepartureTime] means delayed. */
+    @Serializable(with = InstantSerializer::class) val estimatedDepartureTime: Instant? = null,
+    /** Arrival time as originally scheduled. */
+    @Serializable(with = InstantSerializer::class) val scheduledArrivalTime: Instant? = null,
+    /** Arrival time now expected. */
+    @Serializable(with = InstantSerializer::class) val estimatedArrivalTime: Instant? = null,
     /** Total flight time in **minutes**, as sent by the server. Drives the DEPARTED countdown verbatim. */
     val flightDuration: Int? = null,
     val hasConnections: Boolean = false,

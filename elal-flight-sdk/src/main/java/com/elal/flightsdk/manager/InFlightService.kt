@@ -38,6 +38,11 @@ class InFlightService : Service() {
         if (!LiveUpdateManager.isActive) {
             LiveUpdateManager.restoreFromPrefs(this, startServiceIfActive = false)
         }
+        // startForeground would repost the notification the user swiped away; nothing to keep alive then.
+        if (LiveUpdateManager.isCurrentJourneyDismissed(this)) {
+            stopSelf()
+            return START_NOT_STICKY
+        }
         val notification = LiveUpdateManager.buildCurrentNotification(this)
         if (notification != null) {
             if (!startForegroundSafely(notification)) return START_NOT_STICKY

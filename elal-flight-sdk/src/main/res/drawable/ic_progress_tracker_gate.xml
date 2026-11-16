@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Progress tracker for GATE_READY, BOARDING_PENDING, BOARDING: a gate door (mirrored in RTL).
+    Same frame as ic_airplane_*_left_2 (39x25, circle on the right) so every tracker sits at the same spot.
+    Glyph: Material Icons (Apache 2.0), placeholder until design supplies the El Al icon.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="39dp"
+    android:height="25dp"
+    android:viewportWidth="39"
+    android:viewportHeight="25"
+    android:autoMirrored="true">
+    <path
+        android:fillColor="@color/live_update_icon_background"
+        android:pathData="M26.986,0L26.986,0A12.014,12.014 0,0 1,39 12.014L39,12.014A12.014,12.014 0,0 1,26.986 24.029L26.986,24.029A12.014,12.014 0,0 1,14.971 12.014L14.971,12.014A12.014,12.014 0,0 1,26.986 0z" />
+    <group
+        android:translateX="19.786"
+        android:translateY="4.814"
+        android:scaleX="0.6"
+        android:scaleY="0.6">
+        <path
+            android:fillColor="@color/live_update_icon_foreground"
+            android:pathData="M14,6v15H3v-2h2V3h9v1h5v15h2v2h-4V6h-3zM10,11v2h2v-2h-2z" />
+    </group>
+</vector>

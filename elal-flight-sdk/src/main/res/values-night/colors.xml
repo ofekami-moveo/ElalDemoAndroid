@@ -1,4 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="progress_bar_segment">#4D90FE</color>
+    <color name="progress_bar_segment">#4A86F5</color>
+    <color name="progress_bar_segment_delayed">#FFB936</color>
+    <!-- Figma defines one pill palette for both themes. -->
+    <color name="live_update_chip_on_time">#1B358F</color>
+    <color name="live_update_chip_delayed">#FFB936</color>
+    <color name="progress_bar_segment_error">#5F6368</color>
+    <!-- Same as day: one blue for every tracker circle, readable on light and dark cards. -->
+    <color name="live_update_icon_background">#4A86F5</color>
+    <color name="live_update_icon_foreground">#FFFFFF</color>
+    <!-- Status badge: same in both themes (the badge carries its own background). -->
+    <color name="live_update_status_on_time_background">#1FC5A5</color>
+    <color name="live_update_status_delayed_background">#FF8B33</color>
+    <color name="live_update_status_text">#262626</color>
 </resources>

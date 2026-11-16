@@ -3,6 +3,8 @@
 
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <!-- Live Updates (Android 16+). String literal: Manifest.permission has the constant only from android-37 (F9). -->
+    <uses-permission android:name="android.permission.POST_PROMOTED_NOTIFICATIONS" />
 
     <application>
         <service
@@ -17,6 +19,11 @@
             android:noHistory="true"
             android:taskAffinity=""
             android:theme="@android:style/Theme.NoDisplay" />
+
+        <!-- Delete intent of the Live Update: the user swiped it away (approved 2026-11-16). -->
+        <receiver
+            android:name=".manager.LiveUpdateDismissReceiver"
+            android:exported="false" />
 
         <property
             android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"

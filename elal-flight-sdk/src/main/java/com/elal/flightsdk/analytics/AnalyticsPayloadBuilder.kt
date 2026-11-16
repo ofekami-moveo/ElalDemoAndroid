@@ -1,6 +1,7 @@
 package com.elal.flightsdk.analytics
 
 import com.elal.flightsdk.model.FlightContentState
+import com.elal.flightsdk.model.LiveUpdateAction
 import com.elal.flightsdk.model.Stage
 
 /**
@@ -20,6 +21,20 @@ internal object AnalyticsPayloadBuilder {
         "airline" to state.carrier.name,
         "pnr" to state.pnr,
         "trigger_source" to triggerSource,
+    )
+
+    /** [clicked] plus the action the user tapped (`boarding_pass`). */
+    fun actionClicked(state: FlightContentState, action: LiveUpdateAction): Map<String, Any?> =
+        clicked(state, ClickSource.LOCK_SCREEN) + ("action" to action.name.lowercase())
+
+    /** The journey the user swiped away. */
+    fun dismissed(state: FlightContentState): Map<String, Any?> = mapOf(
+        "timestamp" to System.currentTimeMillis(),
+        "os_platform" to OS_PLATFORM,
+        "flight_number" to state.flightNumber,
+        "airline" to state.carrier.name,
+        "pnr" to state.pnr,
+        "current_stage" to stageLabel(state.stage),
     )
 
     fun clicked(state: FlightContentState, clickSource: String): Map<String, Any?> = mapOf(

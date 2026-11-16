@@ -1,105 +1,105 @@
 # El Al Demo Android Project — Overview
 
+_Updated 2026-11-16 (Live Update parity, Phase A, groups 1–5)._
+
 ## What does this app do?
 
-Imagine you're on a plane. This app shows you a **live notification** on your phone that follows your flight from the moment you check in until you grab your bags. It updates by itself — like a tracker that knows where your flight is.
+It shows an El Al journey as an **Android 16 Live Update**: a promoted, ongoing notification with a status-bar
+pill, a progress bar with per-phase icons, and buttons. It follows the flight from check-in to baggage claim and
+is updated in place by server pushes (FCM). It is the Android counterpart of the iOS Live Activity.
 
 ---
 
-## The Two Big "Lego Boxes"
-
-The project has **two modules** (think of them like two separate Lego boxes):
+## The two modules
 
 ```
-ElAlDemoAndroid/
-├── app/                 ← The Demo App (the thing you install on your phone)
-└── elal-flight-sdk/     ← The "Engine" (reusable, can plug into any El Al app)
+ElalDemoAndroid/
+├── app/                 ← Demo host app (what you install): simulators, FCM parser, demo controls
+└── elal-flight-sdk/     ← The SDK (synced by hand into the production app)
 ```
-
-The **SDK** is the engine. The **App** uses the engine.
 
 ---
 
 ## How the folders are organized
 
 ```
-app/
-├── MainActivity.kt              ← The front door of the app
-├── ElAlDemoApplication.kt       ← Runs when app starts, sets up the engine
-├── firebase/
-│   └── FlightMessagingService   ← Listens for push messages from the server
-├── ui/
-│   ├── journey/
-│   │   ├── JourneyDemoScreen    ← What you SEE on screen (buttons, status)
-│   │   └── JourneyViewModel     ← The brain that decides what to show
-│   └── theme/                   ← Colors and fonts (El Al blue, etc.)
-└── debug/
-    └── DebugNextStageReceiver   ← A testing cheat button (TODO: delete before release!)
+app/src/main/java/com/elal/demoapp/
+├── MainActivity.kt              ← Asks for notification permissions; shows the boarding-pass placeholder
+├── ElAlDemoApplication.kt       ← SDK setup: channel, analytics listener, action targets, restore
+├── DemoActionIntents.kt         ← Demo target for the Boarding pass button
+├── firebase/FlightMessagingService.kt  ← FCM → FlightContentState (data contract frozen for Phase A)
+├── ui/journey/                  ← JourneyDemoScreen + JourneyViewModel (simulators and toggles)
+└── debug/DebugNextStageReceiver ← Next-stage broadcast for QA (exported in debug builds only)
 
-elal-flight-sdk/
-├── manager/
-│   ├── LiveUpdateManager        ← The MAIN ENGINE — controls the notification
-│   ├── InFlightService          ← Keeps running in background while flying
-│   └── JourneyPrefs             ← Remembers the flight if you close the app
-├── model/
-│   └── JourneyData              ← Describes what a flight looks like (Stage, times, etc.)
-├── sample/
-│   └── SampleFlightData         ← Fake flights for testing
-└── utils/
-    └── Extensions               ← Helper tools (time formatting, etc.)
+elal-flight-sdk/src/main/java/com/elal/flightsdk/
+├── manager/        ← Android side
+│   ├── LiveUpdateManager             ← Entry point (object): start / update / end, ticks, restore, dismiss
+│   ├── LiveUpdateNotificationMapper  ← LiveUpdateContent → NotificationCompat (ProgressStyle, public version)
+│   ├── LiveUpdateDismissReceiver     ← Delete intent: the user swiped the Live Update away
+│   ├── PromotionDiagnostics          ← Whether the system will promote it; opens the setting
+│   ├── InFlightService               ← Foreground service that keeps DEPARTED ticking (kept; see tasks 4.7)
+│   ├── JourneyPrefs / ServerClock    ← Persistence and server-anchored "now"
+│   └── Android*Provider / AndroidBidiWrapper / AndroidChipLabels
+├── presentation/   ← Pure Kotlin, JVM-tested (no android.*)
+│   ├── LiveUpdateContentBuilder      ← Everything the notification shows, from state + time snapshot
+│   ├── StageVisualCatalog            ← Per-stage table: bar position, tracker, colours, alerts, promotion, actions
+│   ├── ChipTextResolver              ← Status-bar pill text (≤ 7 characters)
+│   ├── DepartedClock / FlightTimeline / TickIntervalCalculator / TimeoutCalculator
+│   └── AlertPolicy / DismissPolicy / FlightDelayResolver / LiveUpdateModeResolver / …
+├── model/          ← FlightContentState (JourneyData.kt), LiveUpdateConfig, LiveUpdateAction, PromotionStatus, …
+├── analytics/      ← FlightAnalyticsListener, click trampoline (LiveActivityClickActivity)
+└── sample/         ← SampleFlightData (TLV → JFK and JFK → TLV journeys)
 ```
 
 ---
 
-## The Journey — Step by Step
-
-The flight goes through these **stages** in order:
+## The journey
 
 ```
-CHECK_IN → GATE_READY → BOARDING → LAST_CALL → DEPARTED → IN_FLIGHT → LANDED → BAGGAGE → COMPLETED
+CHECK_IN → GATE_READY → BOARDING_PENDING → BOARDING → LAST_CALL → DEPARTURE_PENDING
+        → DEPARTED → LANDING_SOON → LANDED → BAGGAGE → COMPLETED
+Exceptions: CONNECTION_ERROR, GENERAL_ERROR
 ```
 
-Each stage updates the notification on your phone automatically.
+- One notification (ID 7001), updated in place. CHECK_IN is a regular ongoing notification; promotion starts at
+  GATE_READY.
+- Title `LY 317 · <stage>`, route sub-text, pill text per stage (gate, time, belt, time left in flight).
+- In DEPARTED the bar and the pill move about once a minute (InFlightService keeps the process alive).
+- A swipe stops all reposts for that journey; `end` (or COMPLETED) clears it; a safety timeout ends it at
+  `dismissalDate`, else arrival + 4 h.
 
 ---
 
-## How data flows (the story of a notification)
+## How data flows
 
-1. **Server sends a push message** (via Firebase/FCM)
-2. `FlightMessagingService` catches it and reads the flight info
-3. It tells `LiveUpdateManager` — the engine — to update the notification
-4. `LiveUpdateManager` shows a **progress bar notification** on your phone
-5. While flying (`IN_FLIGHT`), `InFlightService` keeps updating the progress bar every few seconds
-6. When the plane lands, it automatically moves to `LANDED`
-7. `JourneyPrefs` saves the state so if you close and reopen the app, it remembers
-
----
-
-## Key Files to Know When Continuing
-
-| File | What it does | Touch it when... |
-|------|-------------|-----------------|
-| `LiveUpdateManager.kt` | The heart of the SDK | Changing notification logic |
-| `JourneyViewModel.kt` | Drives the UI | Changing button behavior or screen logic |
-| `JourneyDemoScreen.kt` | The UI itself | Changing what the screen looks like |
-| `FlightMessagingService.kt` | Handles push notifications | Changing how server messages are parsed |
-| `JourneyData.kt` | The data models | Adding new flight stages or fields |
-| `SampleFlightData.kt` | Fake test data | Testing a new stage or flow |
+1. The server sends an FCM data message.
+2. `FlightMessagingService` parses it into a `FlightContentState` (see `planning/current-data-contract.md`).
+3. `LiveUpdateManager` builds the content (`LiveUpdateContentBuilder`) and posts it (`LiveUpdateNotificationMapper`).
+4. In DEPARTED, a tick re-posts the bar and the pill; the start of the flight is persisted, so a process kill
+   doesn't restart the bar.
+5. `JourneyPrefs` keeps the state, so a restarted process restores the journey.
 
 ---
 
-## What's left from the previous developer
+## Host API (what an app integrating the SDK sets)
 
-- There's a **debug cheat button** (`DebugNextStageReceiver`) marked `TODO: remove before release` — don't delete it yet, it's useful for testing
-- The app targets **Android 16+** (API 36) for the "Live Update" notification feature — this won't work on older phones
-- Hebrew (`-iw`) and English localization are both set up
+| API | Purpose |
+|---|---|
+| `LiveUpdateManager.startJourney / updateJourney / endJourney / restoreFromPrefs` | Journey lifecycle |
+| `LiveUpdateManager.config` (`LiveUpdateConfig`) | Refresh interval; `enableLegacyFallback` for Android 15 and older |
+| `LiveUpdateManager.actionIntentProvider` | Target of the Boarding pass button |
+| `LiveUpdateManager.analyticsListener` | Activated, clicked, action clicked, dismissed |
+| `LiveUpdateManager.promotionStatus`, `openPromotionSettings` | Why a Live Update may not be promoted |
 
 ---
 
-## To continue working on this project
+## Working on it
 
-1. Open Android Studio
-2. The main SDK logic lives in `elal-flight-sdk/manager/LiveUpdateManager.kt`
-3. The screen lives in `app/ui/journey/JourneyDemoScreen.kt`
-4. To test a flow without a real server: use `SampleFlightData.kt` — it has two fake journeys (departure TLV→JFK, arrival JFK→TLV)
-5. Run the app on an **Android 16 emulator or device** — the Live Update notifications won't show on older Android versions
+- Spec, tasks and decisions: `agent-os/specs/2026-11-10-live-update-parity/` (`spec.md`, `tasks.md`,
+  `planning/requirements.md`, `planning/device-check.md`). Project rules: `CLAUDE.md`.
+- Unit tests: `JAVA_HOME=$(/usr/libexec/java_home -v 21) ./gradlew :elal-flight-sdk:testDebugUnitTest`.
+- Run on an **Android 16+** device or emulator for the Live Update. On Android 15 and older nothing shows unless
+  the demo's "Android 15 fallback" toggle is on.
+- The demo's sample labels are Hebrew while the SDK strings follow the app language (task 6.5 adds a language
+  toggle).
+- `Docs/CLIENT_TECHNICAL_SPEC.md` and `Docs/JOURNEY_STATES_DATA.md` describe an older state model; see their banners.

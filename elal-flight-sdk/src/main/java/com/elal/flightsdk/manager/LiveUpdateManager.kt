@@ -2,52 +2,58 @@ package com.elal.flightsdk.manager
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
-import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import androidx.core.app.NotificationCompat
-import androidx.core.app.NotificationCompat.ProgressStyle
-import androidx.core.graphics.drawable.IconCompat
-import androidx.core.text.BidiFormatter
 import com.elal.flightsdk.R
 import com.elal.flightsdk.analytics.AnalyticsPayloadBuilder
-import com.elal.flightsdk.analytics.ClickSource
 import com.elal.flightsdk.analytics.FlightAnalyticsListener
-import com.elal.flightsdk.analytics.LiveActivityClickActivity
 import com.elal.flightsdk.analytics.TriggerSource
 import com.elal.flightsdk.model.FlightContentState
+import com.elal.flightsdk.model.GateRecord
+import com.elal.flightsdk.model.LiveUpdateAction
+import com.elal.flightsdk.model.LiveUpdateConfig
+import com.elal.flightsdk.model.PostedState
+import com.elal.flightsdk.model.PromotionStatus
 import com.elal.flightsdk.model.Stage
+import com.elal.flightsdk.model.TimeSnapshot
+import com.elal.flightsdk.presentation.DepartedClock
+import com.elal.flightsdk.presentation.DismissPolicy
+import com.elal.flightsdk.presentation.GateChangeTracker
+import com.elal.flightsdk.presentation.FlightTimeline
+import com.elal.flightsdk.presentation.LiveUpdateContentBuilder
+import com.elal.flightsdk.presentation.LiveUpdateMode
+import com.elal.flightsdk.presentation.LiveUpdateModeResolver
+import com.elal.flightsdk.presentation.ProgressCalculator
+import com.elal.flightsdk.presentation.TickIntervalCalculator
+import com.elal.flightsdk.presentation.TimeoutCalculator
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import com.elal.flightsdk.utils.Logger
-import com.elal.flightsdk.utils.combineLabelAndValue
 import com.elal.flightsdk.utils.orDash
-import com.elal.flightsdk.utils.toAbsoluteInstant
-import com.elal.flightsdk.utils.toFormattedTime
 import com.elal.flightsdk.utils.toHhMmSs
-import com.elal.flightsdk.utils.toMmSs
 import com.elal.flightsdk.utils.toMsReadable
 import com.elal.flightsdk.utils.wallClockNow
 import java.time.Instant
 
 /**
  * Manages the lifecycle of Live Update notifications.
- * Requires Android 16 (API 36) — all public entry points are no-ops on older devices.
+ * Promoted Live Update on Android 16 (API 36)+. On older devices all public entry points are no-ops, unless the
+ * host sets [LiveUpdateConfig.enableLegacyFallback]: then a plain ongoing progress notification (no promotion, no
+ * foreground service) is shown.
  */
 object LiveUpdateManager {
 
     internal const val NOTIFICATION_ID = 7001
     internal const val CHANNEL_ID = "elal_journey"
-    private const val PROGRESS_MAX = 240
-    private const val MIN_API = 36 // Android 16
+    private const val JOURNEY_END_SAVE_TOLERANCE_MS = 60_000L
 
-    private val isSupported: Boolean get() = Build.VERSION.SDK_INT >= MIN_API
-    // Android's ProgressStyle gap bug Fixed
-    private const val SEG0_COMPENSATION = PROGRESS_MAX / 24  // = 10
+    private val mode: LiveUpdateMode get() = LiveUpdateModeResolver.resolve(Build.VERSION.SDK_INT, config.enableLegacyFallback)
+    private val isSupported: Boolean get() = mode != LiveUpdateMode.OFF
     private val log = Logger("LiveUpdateManager")
 
     // Safety net: if no server event arrives within this window, end the journey.
@@ -69,6 +75,25 @@ object LiveUpdateManager {
      */
     var clickIntentProvider: ((Context) -> Intent?)? = null
 
+    /**
+     * Where each Live Update action goes (boarding pass), asked when posting and again on tap.
+     * Return null to hide that action. Unset = no actions.
+     */
+    var actionIntentProvider: ((Context, LiveUpdateAction, FlightContentState) -> Intent?)? = null
+
+    private val _promotionStatus = MutableStateFlow(PromotionStatus.UNSUPPORTED)
+
+    /** Whether the system will show the journey as a promoted Live Update; refreshed on start and stage change. */
+    val promotionStatus: StateFlow<PromotionStatus> = _promotionStatus.asStateFlow()
+
+    /** Host-tunable settings (in-flight refresh interval). Set once at SDK initialization. */
+    @Volatile var config: LiveUpdateConfig = LiveUpdateConfig()
+
+    private val _pillTextFlow = MutableStateFlow<String?>(null)
+
+    /** The status-bar pill text last posted (`null` = icon only or no journey). For host diagnostics and the demo. */
+    val pillTextFlow: StateFlow<String?> = _pillTextFlow.asStateFlow()
+
     private val _stateFlow = MutableStateFlow<FlightContentState?>(null)
     val stateFlow: StateFlow<FlightContentState?> = _stateFlow.asStateFlow()
 
@@ -84,8 +109,16 @@ object LiveUpdateManager {
     // @Synchronized on the entry points + the tick runnable serializes mutation.
     @Volatile private var currentState: FlightContentState? = null
     val isActive: Boolean get() = currentState != null
-    @Volatile private var flightStartRealtimeMs: Long = 0L
-    @Volatile private var flightTotalDurationMs: Long = 0L
+    // In-flight interval on the server timeline; null outside DEPARTED. Its start is persisted per activityId.
+    @Volatile private var departedClock: DepartedClock? = null
+    // Stage and delay of the last post, so the next one alerts only on a new stage or a delay flip.
+    @Volatile private var lastPosted: PostedState? = null
+    // activityId the user swiped away (persisted); null when none. Cleared on end.
+    @Volatile private var dismissedActivityId: String? = null
+    // Journey end last written to prefs, to avoid a write on every tick.
+    @Volatile private var savedJourneyEndMs: Long = 0L
+    // Gate before the last gate change of the current journey (persisted), for "Gate ~~D2~~ D3".
+    @Volatile private var gateRecord: GateRecord? = null
 
     @Volatile private var appContext: Context? = null
     private val handler = Handler(Looper.getMainLooper())
@@ -97,15 +130,20 @@ object LiveUpdateManager {
 
     @Volatile private var selfUpdateState: FlightContentState? = null
     private val selfUpdateRunnable: Runnable = object : Runnable {
-        // Same monitor as the @Synchronized entry points, so the timer pair (flightStartRealtimeMs /
-        // flightTotalDurationMs) can't be read mid-update while updateJourney rewrites it.
+        // Same monitor as the @Synchronized entry points, so departedClock can't be read mid-update
+        // while updateJourney rewrites it.
         override fun run() = synchronized(LiveUpdateManager) {
             val ctx = appContext ?: return@synchronized
             val state = selfUpdateState ?: return@synchronized
-            val progress = computeFlightProgress()
-            val elapsedMs = android.os.SystemClock.elapsedRealtime() - flightStartRealtimeMs
+            if (!DismissPolicy.shouldPost(state.activityId, dismissedActivityId)) {
+                stopSelfUpdate()
+                return@synchronized
+            }
+            val nowMs = ServerClock.nowMs()
+            val progress = departedClock?.progressAt(nowMs) ?: 1.0
+            val remainingMs = departedClock?.remainingAt(nowMs) ?: 0L
             val nextTickMs = calculateNextTickInterval()
-            log.d("✈️ FLIGHT PROGRESS: ${(progress * 100).toInt()}% Complete | Elapsed: ${elapsedMs.toMmSs()} / ${flightTotalDurationMs.toMmSs()} | Next update in ${nextTickMs / 1000}s")
+            log.d("✈️ FLIGHT PROGRESS: ${(progress * 100).toInt()}% Complete | Remaining: ${remainingMs.toMsReadable()} | Next update in ${nextTickMs / 1000}s")
             postNotification(ctx, state, isSelfUpdate = true)
             // Bar and countdown share one clock, so 100% progress means the text is at zero too.
             if (progress >= 1.0) {
@@ -157,9 +195,12 @@ object LiveUpdateManager {
         // leaves a state for restoreFromPrefs to rebuild — otherwise the next incremental FCM has
         // no fallback and fails to parse its missing required fields.
         JourneyPrefs.saveState(context, state)
-        flightStartRealtimeMs = 0L
-        flightTotalDurationMs = 0L
+        departedClock = null
+        lastPosted = null
+        gateRecord = null
+        dismissedActivityId = JourneyPrefs.loadDismissed(context)
         resetWatchdog()
+        logPromotionStatus(context, state)
         postNotification(context, state)
         fireActivated(state, triggerSource)
         return Result.Success(Unit)
@@ -180,6 +221,12 @@ object LiveUpdateManager {
         if (!isSupported) return Result.Success(Unit)
         if (currentState == null) return Result.Failure(LiveUpdateError.NoActiveActivity())
         log.d("updateJourney: stage=${state.stage}")
+        val previousStage = currentState?.stage
+        val updatedGateRecord = GateChangeTracker.update(gateRecord, state.activityId, currentState?.gate, state.gate)
+        if (updatedGateRecord != gateRecord) {
+            gateRecord = updatedGateRecord
+            JourneyPrefs.saveGateRecord(context, updatedGateRecord)
+        }
 
         // Before setupRealtimeClocks below reads it — every DEPARTED push re-anchors "now" to the
         // backend's stamp, so the countdown never inherits a wrong handset clock.
@@ -197,15 +244,26 @@ object LiveUpdateManager {
 
         _stateFlow.value = state
 
+        // The user swiped this journey away: track it (so `end` still clears it) but never post or tick again.
+        if (!DismissPolicy.shouldPost(state.activityId, dismissedActivityId)) {
+            log.i("updateJourney: activityId=${state.activityId} was dismissed by the user — not reposting")
+            resetFlightTimers()
+            context.stopService(serviceIntent)
+            return Result.Success(Unit)
+        }
+        if (previousStage != state.stage) {
+            logPromotionStatus(context, state)
+        }
+
         when (state.stage) {
             Stage.DEPARTED -> {
                 if (selfUpdateState == null) {
-                    val hasDurationToAnimate = setupRealtimeClocks(state)
+                    val hasDurationToAnimate = setupRealtimeClocks(context, state)
                     if (hasDurationToAnimate) startSelfUpdate(state) else selfUpdateState = state
                     ensureInFlightService(context)
                 } else {
                     selfUpdateState = state
-                    setupRealtimeClocks(state)
+                    setupRealtimeClocks(context, state)
                 }
             }
             Stage.LANDING_SOON, Stage.LANDED, Stage.BAGGAGE -> {
@@ -233,6 +291,11 @@ object LiveUpdateManager {
         ServerClock.reset()
         currentState = null
         _stateFlow.value = null
+        _pillTextFlow.value = null
+        lastPosted = null
+        dismissedActivityId = null
+        savedJourneyEndMs = 0L
+        gateRecord = null
         appContext = null
     }
 
@@ -289,39 +352,114 @@ object LiveUpdateManager {
         state: FlightContentState,
         isSelfUpdate: Boolean = false
     ): android.app.Notification {
-        val builder = NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_elal_chip)
-            .setContentTitle(buildStatusBarText(context, state))
-            .setContentText(buildContentText(context, state))
-            .setContentIntent(buildClickPendingIntent(context))
-            .setStyle(buildProgressStyle(context, state))
-            .setCategory(NotificationCompat.CATEGORY_TRANSPORT)
-            .setOngoing(true)
-            .setRequestPromotedOngoing(true)
-
-        builder
-            //.setShortCriticalText(buildChipText(context, state)) // Not Used, but kept for future use
-            .setShowWhen(false)
-            .setOnlyAlertOnce(
-                isSelfUpdate ||
-                        state.stage == Stage.CONNECTION_ERROR ||
-                        state.stage == Stage.GENERAL_ERROR
+        val content = LiveUpdateContentBuilder(AndroidStringProvider(context), AndroidBidiWrapper(), AndroidChipLabels(context))
+            .build(
+                state,
+                currentTimeSnapshot(),
+                isSelfUpdate,
+                lastPosted,
+                promotionAllowed = mode == LiveUpdateMode.PROMOTED,
+                previousGate = gateRecord?.takeIf { it.activityId == state.activityId }?.previousGate,
+                scheduleChangeStyle = config.scheduleChangeStyle,
+                showStatusBadge = config.showStatusBadge,
             )
+        lastPosted = content.postedState
+        if (uiDebugMode && state.stage == Stage.DEPARTED) {
+            log.d("[AIRPLANE] progressBar=${content.progress.value} / ${ProgressCalculator.PROGRESS_MAX}")
+        }
+        _pillTextFlow.value = content.shortCriticalText
         // TODO: for DEBUG only
         //debugNextStageIntent?.let { builder.addAction(0, "Next Stage", it) }
-        return builder.build()
+        return LiveUpdateNotificationMapper(context).map(content, state, timeoutAfterMs(context, state))
     }
 
-    private fun buildClickPendingIntent(context: Context): PendingIntent {
-        val intent = Intent(context, LiveActivityClickActivity::class.java).apply {
-            putExtra(LiveActivityClickActivity.EXTRA_CLICK_SOURCE, ClickSource.LOCK_SCREEN)
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    /**
+     * `setTimeoutAfter` for this post: until `dismissalDate`, else arrival + 4 h (safety net if `end` never
+     * arrives). The absolute end is persisted for the restore check. `null` once the end has passed.
+     */
+    private fun timeoutAfterMs(context: Context, state: FlightContentState): Long? {
+        val nowMs = ServerClock.nowMs()
+        val endMs = TimeoutCalculator.journeyEndServerMs(state, nowMs, wallClockNow().toEpochMilli())
+        if (kotlin.math.abs(endMs - savedJourneyEndMs) > JOURNEY_END_SAVE_TOLERANCE_MS) {
+            JourneyPrefs.saveJourneyEnd(context, endMs)
+            savedJourneyEndMs = endMs
         }
-        return PendingIntent.getActivity(
-            context,
-            NOTIFICATION_ID,
-            intent,
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        return TimeoutCalculator.timeoutAfterMs(endMs, nowMs)
+    }
+
+    /** Refreshes [promotionStatus] and logs it, so a missing pill can be explained from logcat. */
+    private fun logPromotionStatus(context: Context, state: FlightContentState) {
+        val status = PromotionDiagnostics.read(context)
+        _promotionStatus.value = status
+        log.i("promotionStatus=$status (stage=${state.stage})")
+    }
+
+    /** Re-reads [promotionStatus], e.g. when the host screen resumes after the user visited settings. */
+    fun refreshPromotionStatus(context: Context): PromotionStatus {
+        val status = PromotionDiagnostics.read(context)
+        _promotionStatus.value = status
+        return status
+    }
+
+    /** Opens the system setting that allows Live Updates for this app (falls back to its notification settings). */
+    fun openPromotionSettings(context: Context) {
+        runCatching { context.startActivity(PromotionDiagnostics.settingsIntent(context)) }
+            .onFailure { log.e("openPromotionSettings failed: ${it.message}") }
+    }
+
+    /**
+     * Called by the SDK's delete-intent receiver when the user swipes the Live Update away. The journey stays
+     * tracked (updates and `end` are still handled) but is never posted or ticked again; a new activityId posts.
+     */
+    @Synchronized
+    fun onUserDismissed(context: Context, activityId: String) {
+        if (!isSupported) return
+        if (!isActive) {
+            restoreFromPrefs(context, startServiceIfActive = false)
+        }
+        val state = currentState
+        if (state == null || state.activityId != activityId) {
+            log.i("onUserDismissed: activityId=$activityId is not the current journey — ignored")
+            return
+        }
+        log.i("onUserDismissed: activityId=$activityId — no more reposts for this journey")
+        JourneyPrefs.saveDismissed(context, activityId)
+        dismissedActivityId = activityId
+        resetFlightTimers()
+        context.stopService(android.content.Intent(context, InFlightService::class.java))
+        _pillTextFlow.value = null
+        val listener = analyticsListener ?: return
+        runCatching { listener.onLiveActivityDismissed(AnalyticsPayloadBuilder.dismissed(state)) }
+            .onFailure { log.e("analytics listener threw on dismissed: ${it.message}") }
+    }
+
+    /**
+     * Demo / QA helper: removes the Live Update and runs the same path as a user swipe, for devices or test
+     * runs where swiping isn't practical.
+     */
+    fun simulateUserDismiss(context: Context) {
+        val activityId = currentState?.activityId ?: return
+        context.getSystemService(NotificationManager::class.java).cancel(NOTIFICATION_ID)
+        onUserDismissed(context, activityId)
+    }
+
+    /** True when the current journey was swiped away; [InFlightService] uses it to avoid reposting. */
+    internal fun isCurrentJourneyDismissed(context: Context): Boolean {
+        val activityId = currentState?.activityId ?: return false
+        val dismissed = dismissedActivityId ?: JourneyPrefs.loadDismissed(context)?.also { dismissedActivityId = it }
+        return !DismissPolicy.shouldPost(activityId, dismissed)
+    }
+
+    /**
+     * Reads the in-flight clock once per build, so the bar and the pill share one value.
+     * `remainingFlightMs` is null when no DEPARTED clock is running; progress is 1.0 then, as before.
+     */
+    private fun currentTimeSnapshot(): TimeSnapshot {
+        val clock = departedClock
+        val nowMs = ServerClock.nowMs()
+        return TimeSnapshot(
+            flightProgress = clock?.progressAt(nowMs) ?: 1.0,
+            remainingFlightMs = clock?.remainingAt(nowMs),
         )
     }
 
@@ -330,6 +468,10 @@ object LiveUpdateManager {
         state: FlightContentState,
         isSelfUpdate: Boolean = false
     ) {
+        if (!DismissPolicy.shouldPost(state.activityId, dismissedActivityId)) {
+            log.i("postNotification: activityId=${state.activityId} was dismissed — skipped")
+            return
+        }
         val nm = context.getSystemService(NotificationManager::class.java)
         nm.notify(NOTIFICATION_ID, buildNotification(context, state, isSelfUpdate))
     }
@@ -361,13 +503,28 @@ object LiveUpdateManager {
         // elapsedRealtime is measured from boot, so the persisted anchor is still projectable after a
         // process kill — the countdown resumes on server time rather than dropping to the handset's.
         ServerClock.restore(context)
+        // Past the journey's end (dismissalDate, else arrival + 4 h): the safety net would have removed it.
+        val endMs = JourneyPrefs.loadJourneyEnd(context)
+        if (endMs != null && ServerClock.nowMs() > endMs) {
+            log.i("restoreFromPrefs: journey ended at $endMs — clearing instead of restoring")
+            currentState = state
+            endJourney(context)
+            return
+        }
         currentState = state
         _stateFlow.value = state
         appContext = context.applicationContext
+        dismissedActivityId = JourneyPrefs.loadDismissed(context)
+        savedJourneyEndMs = endMs ?: 0L
+        gateRecord = JourneyPrefs.loadGateRecord(context)
         resetWatchdog()
+        if (!DismissPolicy.shouldPost(state.activityId, dismissedActivityId)) {
+            log.i("restoreFromPrefs: activityId=${state.activityId} was dismissed — restored without ticks")
+            return
+        }
         when (state.stage) {
             Stage.DEPARTED -> {
-                if (setupRealtimeClocks(state)) startSelfUpdate(state) else selfUpdateState = state
+                if (setupRealtimeClocks(context, state)) startSelfUpdate(state) else selfUpdateState = state
                 if (startServiceIfActive) ensureInFlightService(context)
             }
             else -> Unit
@@ -385,6 +542,10 @@ object LiveUpdateManager {
      * app is next in the foreground.
      */
     private fun ensureInFlightService(context: Context) {
+        // The Android 15 fallback never runs a foreground service: ticks continue only while the process lives.
+        if (!mode.usesForegroundService) {
+            return
+        }
         val intent = android.content.Intent(context, InFlightService::class.java)
         try {
             androidx.core.content.ContextCompat.startForegroundService(context, intent)
@@ -394,255 +555,61 @@ object LiveUpdateManager {
     }
 
     /**
-     * Segment layout — always exactly 3 segments, never changes:
-     *  seg0 (short) + seg1 (short) + seg2 (long / flight path)
-     *
-     * Step 1 – CHECK_IN:                              progress=0           → all grey,         no tracker
-     * Step 2 – GATE_READY, BOARDING:                  progress=seg0        → seg0 blue,        no tracker
-     * Step 3 – LAST_CALL (ready to fly):              progress=flightStart → seg0+seg1 blue,   airplane at start (takeoff icon)
-     * Step 4 – DEPARTED (in-flight):                  progress grows       → blue trail,       airplane moves
-     * Step 5 – LANDED, BAGGAGE:                       progress=max         → all blue,         landing icon
-     */
-    private fun buildProgressStyle(
-        context: Context,
-        state: FlightContentState
-    ): ProgressStyle {
-        val shortSegLen  = PROGRESS_MAX / 5                      // 48
-        val seg0Len      = shortSegLen - SEG0_COMPENSATION       // 38
-        val seg1Len      = shortSegLen                           // 48
-        val flightStart  = seg0Len + seg1Len + 2                    // 88
-        val longSegLen   = PROGRESS_MAX - flightStart            // 154
-
-        val progressIndex = when (state.stage) {
-            Stage.CONNECTION_ERROR, Stage.GENERAL_ERROR      -> -1
-            Stage.CHECK_IN                                   ->  0
-            Stage.GATE_READY, Stage.BOARDING_PENDING,
-            Stage.BOARDING, Stage.DEPARTURE_PENDING          ->  1
-            Stage.LAST_CALL, Stage.DEPARTED                  ->  2
-            Stage.LANDING_SOON                               ->  4
-            Stage.LANDED, Stage.BAGGAGE                      ->  4
-            Stage.COMPLETED                                  ->  4
-        }
-
-        val segmentColor = context.getColor(R.color.progress_bar_segment)
-
-        val segments = listOf(
-            ProgressStyle.Segment(seg0Len).setColor(segmentColor),
-            ProgressStyle.Segment(seg1Len).setColor(segmentColor),
-            ProgressStyle.Segment(longSegLen).setColor(segmentColor)
-        )
-
-        val progress: Int = when {
-            state.stage == Stage.DEPARTED -> {
-                val flightProgress = computeFlightProgress()
-                val filled = (flightProgress * longSegLen).toInt().coerceIn(0, longSegLen - 1)
-                if (uiDebugMode) log.d("[AIRPLANE] fill=$filled / $longSegLen | progressBar=${flightStart + filled} / $PROGRESS_MAX")
-                flightStart + filled
-            }
-            progressIndex >= 4 -> PROGRESS_MAX      // LANDING_SOON/LANDED/BAGGAGE — end of bar
-            progressIndex >= 2 -> flightStart       // LAST_CALL — airplane at path start
-            progressIndex >= 1 -> seg0Len           // GATE_READY/BOARDING — end of seg0
-            else               -> 0                 // CHECK_IN / errors
-        }
-
-        val style = ProgressStyle()
-            .setProgressSegments(segments)
-            .setProgress(progress)
-            .setStyledByProgress(true)
-
-        val trackerIcon = when (state.stage) {
-            Stage.LAST_CALL            -> R.drawable.ic_airplane_taking_off_left_2
-            Stage.DEPARTED             -> R.drawable.ic_airplane_move_left_2
-            Stage.LANDING_SOON, Stage.LANDED, Stage.BAGGAGE -> R.drawable.ic_airplane_land_left_2
-            else                       -> R.drawable.ic_airplane_placeholder_transparent
-        }
-        style.setProgressTrackerIcon(IconCompat.createWithResource(context, trackerIcon))
-
-        return style
-    }
-
-    /**
      * Never compares the arrival time against now to decide whether the flight is over — the stage
      * comes from the server and the SDK renders what it was told.
      *
-     * @return true when there is a positive duration for the bar to fill over, so callers can tick.
-     * False only means there is nothing to animate (no flightDuration and a non-positive ETA − Now
-     * fallback); the airplane then sits at full progress, since [computeFlightProgress] returns 1.0
-     * when duration <= 0.
+     * @return true when there is a positive interval for the bar to fill over, so callers can tick.
+     * False only means there is nothing to animate (the arrival is not after the start); the airplane
+     * then sits at full progress, since [DepartedClock.progressAt] returns 1.0.
      */
-    private fun setupRealtimeClocks(state: FlightContentState): Boolean {
-        // Mirrors the iOS live activity: the interval runs from "now" to the arrival instant, and that
-        // arrival is recomputed from scratch on every DEPARTED push as
+    private fun setupRealtimeClocks(context: Context, state: FlightContentState): Boolean {
+        // Mirrors the iOS live activity: the arrival is recomputed from scratch on every DEPARTED push as
         //     departureTime + departureTimezoneOffset + flightDuration
-        // resolved on the GMT timeline. The server never sends the arrival's own offset, so it cannot be
-        // taken from `arrivalTime` — it has to be derived, exactly as iOS derives it.
+        // resolved on the GMT timeline (see DepartedClock.resolve for the fallbacks). The start is the
+        // first DEPARTED push of this activityId, persisted, so a restore or a repeated push continues
+        // the bar instead of restarting it (F1).
         //
-        // Only epoch millis are compared here; `ZoneId.systemDefault()` is never read, so the device's
-        // timezone — a DST flip, or the phone picking up the destination zone as it lands — cannot
-        // move the result. "Now" comes from [ServerClock], i.e. the backend's own stamp on the push
-        // projected forward monotonically, so a handset with auto-time off and a hand-set hour still
-        // counts down to the right arrival.
+        // "Now" comes from [ServerClock], i.e. the backend's own stamp on the push projected forward
+        // monotonically, so a handset with auto-time off and a hand-set hour still counts down right.
         val nowMs = ServerClock.nowMs()
-        val minutes = state.flightDuration?.takeIf { it > 0 }
-        val departureUtc = state.departureTime.toAbsoluteInstant(state.departureTimezoneOffset)
-        val arrivalUtcMs = minutes?.let { m -> departureUtc?.let { it.toEpochMilli() + m * 60_000L } }
-
-        val source: String
-        flightTotalDurationMs = when {
-            // The iOS path. A non-positive result means the calculated arrival has already passed:
-            // the airplane parks at 100% and the text reads "landing soon", which is what iOS shows.
-            arrivalUtcMs != null -> {
-                source = "calculated arrival − now (flightDuration=${minutes}min)"
-                (arrivalUtcMs - nowMs).coerceAtLeast(0L)
-            }
-            // No usable offset, so the naive departure cannot be placed on the timeline and the
-            // duration can only be measured forward from this push. This is the one case that drifts
-            // later than iOS — by however long after departure the push landed.
-            minutes != null -> {
-                source = "flightDuration from now — NO departureTimezoneOffset"
-                log.e("departureTimezoneOffset missing/unparseable ('${state.departureTimezoneOffset}') — cannot resolve the arrival on the GMT timeline; falling back to ${minutes}min from now, which will read later than iOS")
-                minutes.toLong() * 60_000L
-            }
-            // No duration either. arrivalTime is naive destination-local and the server sends no
-            // offset for it, so this stays in the naive frame (wallClockNow) rather than mixing a
-            // naive stamp with epoch millis.
-            else -> {
-                source = "ETA − Now"
-                (state.arrivalTime.toEpochMilli() - wallClockNow().toEpochMilli()).coerceAtLeast(0L)
-            }
+        val timeline = FlightTimeline.from(state)
+        val persistedStartMs = JourneyPrefs.loadDepartedStart(context, state.activityId)
+        val clock = DepartedClock.resolve(state, nowMs, wallClockNow().toEpochMilli(), persistedStartMs)
+        if (persistedStartMs == null) {
+            JourneyPrefs.saveDepartedStart(context, state.activityId, clock.startServerMs)
         }
-        flightStartRealtimeMs = android.os.SystemClock.elapsedRealtime()
+        departedClock = clock
+
+        val source = when {
+            timeline.calculatedArrivalUtcMs != null -> "calculated arrival (flightDuration=${timeline.flightDurationMinutes}min)"
+            timeline.flightDurationMinutes != null -> "start + flightDuration — NO departureTimezoneOffset"
+            else -> "server ETA − device now"
+        }
+        if (timeline.calculatedArrivalUtcMs == null && timeline.flightDurationMinutes != null) {
+            log.e("departureTimezoneOffset missing/unparseable ('${state.departureTimezoneOffset}') — arrival = start + ${timeline.flightDurationMinutes}min, which can read later than iOS")
+        }
         log.i(
             "\n📋 JOURNEY TIMELINE" +
                     "\n   Departure           : ${state.departureTime.toHhMmSs()} (${state.origin} local, offset ${state.departureTimezoneOffset.orDash()})" +
-                    (departureUtc?.let { "\n   Departure (GMT)     : ${it.toHhMmSs()}" } ?: "") +
-                    (arrivalUtcMs?.let { "\n   Arrival (calculated): ${Instant.ofEpochMilli(it).toHhMmSs()} GMT  ← departure + ${minutes}min" } ?: "") +
+                    (timeline.departureUtc?.let { "\n   Departure (GMT)     : ${it.toHhMmSs()}" } ?: "") +
+                    "\n   Arrival (used)      : ${Instant.ofEpochMilli(clock.arrivalServerMs).toHhMmSs()} GMT  ($source)" +
                     "\n   Arrival (server ETA): ${state.arrivalTime.toHhMmSs()}  (display only)" +
+                    "\n   Start               : ${Instant.ofEpochMilli(clock.startServerMs).toHhMmSs()} GMT  (${if (persistedStartMs != null) "persisted" else "this push"})" +
                     "\n   Now (GMT)           : ${Instant.ofEpochMilli(nowMs).toHhMmSs()}  (${if (ServerClock.isAnchored) "server clock" else "device clock"})" +
                     "\n   ─────────────────────────────────────" +
-                    "\n   Interval            : ${flightTotalDurationMs.toMsReadable()}  ($source)  ← bar and countdown both run over this" +
+                    "\n   Interval            : ${clock.totalMs.coerceAtLeast(0L).toMsReadable()}  ← bar and pill both run over this" +
                     "\n   ─────────────────────────────────────" +
                     "\n   Tick Interval       : ${calculateNextTickInterval() / 1000}s"
         )
-        return flightTotalDurationMs > 0L
+        return clock.hasDuration
     }
 
-    private fun calculateNextTickInterval(): Long {
-        if (flightTotalDurationMs <= 0) return 1_000L
-        val onePercentMs = flightTotalDurationMs / 100
-        return onePercentMs.coerceIn(1_000L, 60_000L)
-    }
-
-    /**
-     * Time left on the countdown text, or null when [setupRealtimeClocks] found nothing to run over.
-     *
-     * Shares the progress bar's clock, so the two can never disagree: both start at the push and both
-     * reach zero at the calculated arrival — the instant the iOS live activity ends on. Decrementing
-     * on the monotonic elapsedRealtime() means a clock or timezone change mid-flight cannot jerk the
-     * text; the absolute arrival is re-resolved on the next push instead.
-     */
-    private fun departedCountdownRemainingMs(): Long? {
-        if (flightTotalDurationMs <= 0L || flightStartRealtimeMs <= 0L) return null
-        val elapsed = android.os.SystemClock.elapsedRealtime() - flightStartRealtimeMs
-        return (flightTotalDurationMs - elapsed).coerceAtLeast(0L)
-    }
-
-    private fun buildDepartedCountdown(context: Context, state: FlightContentState): String {
-        val remainingMs = departedCountdownRemainingMs()
-            ?: (state.arrivalTime.toEpochMilli() - wallClockNow().toEpochMilli())
-        if (remainingMs <= 0L) {
-            return context.getString(R.string.notif_content_landing_soon)
-        }
-        val totalMinutes = remainingMs / 60_000L
-        val hours = (totalMinutes / 60).toInt()
-        val minutes = (totalMinutes % 60).toInt()
-        return if (hours == 0) {
-            val displayMinutes = minutes.coerceAtLeast(1)
-            context.getString(R.string.notif_content_departed_minutes, displayMinutes)
-        } else {
-            context.getString(R.string.notif_content_departed, hours, minutes)
-        }
-    }
-
-    /**
-     * DEPARTURE_PENDING content line: the server-sent [FlightContentState.message] (e.g. "Estimated
-     * flight time") concatenated with the approximate flight time derived from
-     * [FlightContentState.flightDuration] (server-sent minutes), formatted as "Xh:MMm" — e.g. a
-     * message of "Estimated flight time" + 210 → "Estimated flight time 3h:30m". The label is never
-     * hardcoded here; it comes from the server message. Falls back to the message alone when the
-     * server sends no usable duration.
-     */
-    private fun buildEstimatedFlightTime(context: Context, state: FlightContentState): String {
-        val minutes = state.flightDuration?.takeIf { it > 0 } ?: return state.message.orDash()
-        val hours = minutes / 60
-        val mins = minutes % 60
-        val flightTime = context.getString(R.string.notif_flight_time, hours, mins)
-        return combineLabelAndValue(state.message, flightTime)
-    }
+    /** 1% of the flight, capped by [LiveUpdateConfig.progressRefreshIntervalMs] (clamped 1–15 min). */
+    private fun calculateNextTickInterval(): Long =
+        TickIntervalCalculator.intervalMs(departedClock?.totalMs ?: 0L, config.progressRefreshIntervalMs)
 
     private fun resetFlightTimers() {
         stopSelfUpdate()
-        flightStartRealtimeMs = 0L
-        flightTotalDurationMs = 0L
+        departedClock = null
     }
-
-    private fun computeFlightProgress(): Double {
-        if (flightTotalDurationMs <= 0) return 1.0
-        val elapsed = android.os.SystemClock.elapsedRealtime() - flightStartRealtimeMs
-        return (elapsed.toDouble() / flightTotalDurationMs).coerceIn(0.0, 1.0)
-    }
-
-    private fun buildStatusBarText(context: Context, state: FlightContentState): String {
-        val bidi = BidiFormatter.getInstance()
-        val flightNumber = bidi.unicodeWrap(state.flightNumber.orDash())
-        val stageTitle = state.stageTitle.orDash()
-        return when (state.stage) {
-            Stage.CHECK_IN, Stage.GATE_READY, Stage.BOARDING_PENDING, Stage.BOARDING, Stage.LAST_CALL, Stage.DEPARTURE_PENDING ->
-                "$flightNumber • ${state.departureTime.toFormattedTime()} • $stageTitle"
-            Stage.DEPARTED, Stage.LANDING_SOON, Stage.LANDED, Stage.BAGGAGE, Stage.COMPLETED ->
-                "$flightNumber • ${state.arrivalTime.toFormattedTime()} • $stageTitle"
-            Stage.CONNECTION_ERROR -> context.getString(R.string.notif_statusbar_connection_error)
-            Stage.GENERAL_ERROR    -> context.getString(R.string.notif_statusbar_general_error)
-        }
-    }
-
-    private fun buildContentText(context: Context, state: FlightContentState): String {
-        val bidi = BidiFormatter.getInstance()
-        return when (state.stage) {
-            Stage.CHECK_IN    -> combineLabelAndValue(state.title, state.checkInCounters.orDash())
-            Stage.GATE_READY  -> combineLabelAndValue(state.message, combineLabelAndValue(state.gateTitle, state.gate.orDash()))
-            Stage.BOARDING_PENDING -> state.message.orDash()
-            Stage.BOARDING    -> state.gate
-                ?.takeIf { it.isNotBlank() && it != "--" }
-                ?.let { combineLabelAndValue(state.message, combineLabelAndValue(state.gateTitle, it)) }
-                ?: state.message.orDash()
-            Stage.LAST_CALL   -> combineLabelAndValue(state.title, combineLabelAndValue(state.gateTitle, state.gate.orDash()))
-            Stage.DEPARTURE_PENDING -> buildEstimatedFlightTime(context, state)
-            Stage.DEPARTED    -> buildDepartedCountdown(context, state)
-            Stage.LANDING_SOON -> state.message.orDash()
-            Stage.LANDED      -> if (state.baggageCarousel.isNullOrBlank() || state.baggageCarousel == "--") {
-                state.title
-            } else {
-                "${state.title}\n${combineLabelAndValue(combineLabelAndValue(state.message+'-', state.carouselTitle), state.baggageCarousel)}"
-            }
-            Stage.BAGGAGE     -> combineLabelAndValue(state.title, state.baggageCarousel.orDash())
-            Stage.COMPLETED   -> context.getString(R.string.notif_content_arrival_welcome, bidi.unicodeWrap(state.destination))
-            Stage.CONNECTION_ERROR -> context.getString(R.string.notif_content_connection_error)
-            Stage.GENERAL_ERROR    -> context.getString(R.string.notif_content_general_error)
-        }
-    }
-
-    // Not Used, but kept for future use
-//    private fun buildChipText(context: Context, state: FlightContentState): String = when (state.stage) {
-//        Stage.CHECK_IN    -> state.checkInCounters ?: context.getString(R.string.notif_chip_check_in)
-//        Stage.GATE_READY,
-//        Stage.BOARDING,
-//        Stage.LAST_CALL   -> state.gate ?: context.getString(R.string.notif_chip_boarding)
-//        Stage.DEPARTED    -> context.getString(R.string.notif_chip_departed)
-//        Stage.LANDED,
-//        Stage.BAGGAGE,
-//        Stage.COMPLETED   -> context.getString(R.string.notif_chip_arrival)
-//        Stage.CONNECTION_ERROR -> context.getString(R.string.notif_chip_connection_error)
-//        Stage.GENERAL_ERROR    -> context.getString(R.string.notif_chip_general_error)
-//    }
 }

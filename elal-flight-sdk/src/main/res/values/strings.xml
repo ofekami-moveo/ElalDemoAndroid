@@ -16,38 +16,49 @@
     <string name="notif_channel_name">Journey Updates</string>
     <string name="notif_channel_description">Live updates for your El Al journey</string>
 
-    <!-- Notification content text (format strings) -->
-    <string name="notif_content_check_in">Check-in desks: %s</string>
-    <string name="notif_content_gate_ready">Gate: %s</string>
-    <string name="notif_content_boarding">Your zone: %s</string>
-    <string name="notif_content_last_call">No boarding after gate closes: %s</string>
     <!-- Approximate flight time (appended to the server-sent DEPARTURE_PENDING message) -->
     <string name="notif_flight_time">%1$dh:%2$02dm</string>
-    <string name="notif_content_departed">Landing in %1$dh %2$dmin</string>
-    <string name="notif_content_departed_minutes">Landing in %1$dmin</string>
-    <string name="notif_content_landing_soon">Landing soon</string>
-    <string name="notif_content_arrival_baggage">Baggage claim will be at carousel: %s</string>
     <string name="notif_content_arrival_welcome">Welcome to %s</string>
     <string name="notif_content_connection_error">You seem to be offline. Check your connection.</string>
     <string name="notif_content_general_error">Error has occurred</string>
 
     <!-- Notification chip text -->
-    <string name="notif_chip_check_in">Check-in</string>
-    <string name="notif_chip_boarding">Boarding</string>
-    <string name="notif_chip_departed">En route</string>
-    <string name="notif_chip_arrival">Arrival</string>
     <string name="notif_chip_connection_error">Offline</string>
     <string name="notif_chip_general_error">Error</string>
+    <!-- Status-bar pill, max 7 characters after formatting (Figma ELAL 6944:19247 shows "6:12h") -->
+    <string name="notif_chip_belt">Belt %1$s</string>
+    <string name="notif_chip_duration_hours">%1$d:%2$02dh</string>
+    <string name="notif_chip_duration_minutes">%1$dm</string>
 
-    <!-- Notification status bar trailing labels -->
-    <string name="notif_statusbar_check_in">Baggage drop</string>
-    <string name="notif_statusbar_gate_ready">Gate Ready</string>
-    <string name="notif_statusbar_boarding">Boarding</string>
-    <string name="notif_statusbar_last_call">Last Call</string>
-    <string name="notif_statusbar_departed">On The Way</string>
-    <string name="notif_statusbar_landed">Landed</string>
-    <string name="notif_statusbar_baggage">Baggage Claim</string>
-    <string name="notif_statusbar_completed">Completed</string>
-    <string name="notif_statusbar_connection_error">Connection Error</string>
-    <string name="notif_statusbar_general_error">Error</string>
+    <!-- Live Update title / route / lock screen (group 2) -->
+    <string name="notif_title">%1$s · %2$s</string>
+    <string name="notif_subtext_route">%1$s → %2$s</string>
+    <string name="notif_content_lands_at">Lands at %s</string>
+    <string name="notif_public_gate">Gate %s</string>
+    <string name="notif_public_departs">Departs %s</string>
+    <string name="notif_public_arrives">Arrives %s</string>
+
+    <!-- Stage title in the notification when the server sends none -->
+    <string name="notif_stage_check_in">Check-in</string>
+    <string name="notif_stage_gate_ready">Gate ready</string>
+    <string name="notif_stage_boarding_pending">Boarding soon</string>
+    <string name="notif_stage_boarding">Boarding</string>
+    <string name="notif_stage_last_call">Last call</string>
+    <string name="notif_stage_departure_pending">Departing soon</string>
+    <string name="notif_stage_departed">On the way</string>
+    <string name="notif_stage_landing_soon">Landing soon</string>
+    <string name="notif_stage_landed">Landed</string>
+    <string name="notif_stage_baggage">Baggage claim</string>
+    <string name="notif_stage_completed">Completed</string>
+    <string name="notif_stage_connection_error">Connection error</string>
+    <string name="notif_stage_general_error">Error</string>
+
+    <!-- Live Update actions (group 4) -->
+    <string name="notif_action_boarding_pass">Boarding pass</string>
+
+    <!-- Schedule changes (group 3b): "Departs ~~17:00~~ 17:55", plain "17:55 (was 17:00)", TalkBack "17:55, was 17:00" -->
+    <string name="notif_change_departs">Departs %s</string>
+    <string name="notif_change_values">%1$s %2$s</string>
+    <string name="notif_change_was">%1$s (was %2$s)</string>
+    <string name="notif_change_spoken">%1$s, was %2$s</string>
 </resources>

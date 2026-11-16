@@ -28,6 +28,10 @@
 
     <!-- Button labels -->
     <string name="conn_error_button">Conn. Error</string>
+    <string name="delay_toggle_off">Simulate delay: off</string>
+    <string name="delay_toggle_on">Simulate delay: on (DELAYED)</string>
+    <string name="demo_pill_text">Status-bar pill: %s</string>
+    <string name="demo_pill_icon_only">Status-bar pill: icon only</string>
     <string name="error_button">Error</string>
 
     <!-- Detail texts (format strings) -->
@@ -53,4 +57,37 @@
     <string name="error_no_active">No active live update to modify</string>
     <string name="error_notifications_disabled">Notifications are not enabled</string>
     <string name="error_failed_to_start">Failed to start: %s</string>
+
+    <!-- Group 4 demo controls -->
+    <string name="demo_dismiss">Dismiss (simulate swipe)</string>
+    <string name="demo_promotion_title">Live Updates (promotion)</string>
+    <string name="demo_promotion_allowed">Allowed</string>
+    <string name="demo_promotion_blocked">Blocked by the user</string>
+    <string name="demo_promotion_notifications_disabled">Notifications are off</string>
+    <string name="demo_promotion_unsupported">Not supported (Android 15 or older)</string>
+    <string name="demo_open_settings">Open settings</string>
+    <string name="demo_boarding_pass_placeholder">Boarding pass (demo placeholder)</string>
+    <string name="demo_fallback_off">Android 15 fallback: off</string>
+    <string name="demo_fallback_on">Android 15 fallback: on</string>
+
+    <!-- Group 6: language toggle and the sample journeys' server-style labels (EN) -->
+    <string name="demo_language_switch">Language: English (switch to עברית)</string>
+    <string name="sample_desk_title">Check-in desks:</string>
+    <string name="sample_gate_title">Gate:</string>
+    <string name="sample_boarding_soon">Boarding starts soon</string>
+    <string name="sample_zone_title">Your zone:</string>
+    <string name="sample_last_call_title">No boarding after the gate closes:</string>
+    <string name="sample_departing_soon">Departing soon</string>
+    <string name="sample_estimated_flight_time">Estimated flight time</string>
+    <string name="sample_landing_at">Landing at %s</string>
+    <string name="sample_landing_soon">Landing soon</string>
+    <string name="sample_welcome_to">Welcome to %s</string>
+    <string name="sample_baggage_carousel">Baggage arrives at carousel:</string>
+
+    <!-- Group 3b demo controls -->
+    <string name="demo_gate_change">Simulate gate change</string>
+    <string name="demo_strike_style_span">Change style: strike</string>
+    <string name="demo_strike_style_text">Change style: text</string>
+    <string name="demo_status_badge_off">Status badge: off</string>
+    <string name="demo_status_badge_on">Status badge: on</string>
 </resources>

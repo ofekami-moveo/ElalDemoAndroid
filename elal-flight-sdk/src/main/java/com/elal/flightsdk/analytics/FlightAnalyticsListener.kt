@@ -21,6 +21,18 @@ interface FlightAnalyticsListener {
      * (event name: `live_activity_clicked`).
      */
     fun onLiveActivityClicked(params: Map<String, Any?>)
+
+    /**
+     * Fired when the user taps an action button on the Live Activity (boarding pass).
+     * Same parameters as [onLiveActivityClicked] plus `action`. Default: ignored, so existing hosts compile.
+     */
+    fun onLiveActivityActionClicked(params: Map<String, Any?>) {}
+
+    /**
+     * Fired when the user swipes the Live Activity away; the SDK won't post it again for that journey.
+     * Default: ignored, so existing hosts compile.
+     */
+    fun onLiveActivityDismissed(params: Map<String, Any?>) {}
 }
 
 /**

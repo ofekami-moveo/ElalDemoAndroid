@@ -10,6 +10,9 @@ class ElAlDemoApplication : Application() {
         super.onCreate()
         LiveUpdateManager.ensureChannel(this)
         LiveUpdateManager.analyticsListener = DebugAnalyticsListener
+        LiveUpdateManager.actionIntentProvider = { context, action, state ->
+            DemoActionIntents.intentFor(context, action, state)
+        }
         LiveUpdateManager.restoreFromPrefs(this)
     }
 }
@@ -23,6 +26,14 @@ private object DebugAnalyticsListener : FlightAnalyticsListener {
 
     override fun onLiveActivityClicked(params: Map<String, Any?>) {
         Log.i(TAG, "live_activity_clicked ${params.pretty()}")
+    }
+
+    override fun onLiveActivityActionClicked(params: Map<String, Any?>) {
+        Log.i(TAG, "live_activity_action_clicked ${params.pretty()}")
+    }
+
+    override fun onLiveActivityDismissed(params: Map<String, Any?>) {
+        Log.i(TAG, "live_activity_dismissed ${params.pretty()}")
     }
 
     private fun Map<String, Any?>.pretty(): String =

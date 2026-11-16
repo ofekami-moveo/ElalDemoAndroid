@@ -4,6 +4,7 @@ import android.app.Activity
 import android.content.Intent
 import android.os.Bundle
 import com.elal.flightsdk.manager.LiveUpdateManager
+import com.elal.flightsdk.model.LiveUpdateAction
 import com.elal.flightsdk.utils.Logger
 
 /**
@@ -28,18 +29,32 @@ class LiveActivityClickActivity : Activity() {
         overridePendingTransition(0, 0)
 
         val source = intent?.getStringExtra(EXTRA_CLICK_SOURCE) ?: ClickSource.LOCK_SCREEN
+        val action = intent?.getStringExtra(EXTRA_ACTION)
+            ?.let { name -> LiveUpdateAction.entries.firstOrNull { it.name == name } }
 
         val state = LiveUpdateManager.stateFlow.value
         if (state != null) {
             runCatching {
-                LiveUpdateManager.analyticsListener
-                    ?.onLiveActivityClicked(AnalyticsPayloadBuilder.clicked(state, source))
+                val listener = LiveUpdateManager.analyticsListener
+                if (action != null) {
+                    listener?.onLiveActivityActionClicked(AnalyticsPayloadBuilder.actionClicked(state, action))
+                } else {
+                    listener?.onLiveActivityClicked(AnalyticsPayloadBuilder.clicked(state, source))
+                }
             }.onFailure { log.e("analytics listener threw on click: ${it.message}") }
         } else {
             log.i("click received with no active state — skipping analytics")
         }
 
-        val launch = LiveUpdateManager.clickIntentProvider?.invoke(this)
+        // An action opens the host's target for it (asked again now, as the state may have changed); a tap on
+        // the notification, or an action whose target is gone, opens the host's click intent or launcher.
+        val actionTarget = if (action != null && state != null) {
+            LiveUpdateManager.actionIntentProvider?.invoke(this, action, state)
+        } else {
+            null
+        }
+        val launch = actionTarget
+            ?: LiveUpdateManager.clickIntentProvider?.invoke(this)
             ?: packageManager.getLaunchIntentForPackage(packageName)
         if (launch != null) {
             launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
@@ -55,5 +70,8 @@ class LiveActivityClickActivity : Activity() {
 
     companion object {
         const val EXTRA_CLICK_SOURCE = "com.elal.flightsdk.extra.CLICK_SOURCE"
+
+        /** Name of the [LiveUpdateAction] tapped; absent for a tap on the notification itself. */
+        const val EXTRA_ACTION = "com.elal.flightsdk.extra.ACTION"
     }
 }

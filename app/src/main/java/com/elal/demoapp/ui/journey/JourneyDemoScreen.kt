@@ -2,6 +2,8 @@ package com.elal.demoapp.ui.journey
 
 import android.os.SystemClock
 import androidx.compose.foundation.background
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
@@ -16,6 +18,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
@@ -27,8 +30,10 @@ import com.elal.demoapp.ui.theme.ElAlBlue
 import com.elal.demoapp.ui.theme.ElAlDemoTheme
 import com.elal.demoapp.ui.theme.Green
 import com.elal.demoapp.ui.theme.Red
+import com.elal.demoapp.ui.theme.Yellow
 import com.elal.demoapp.ui.util.UiText
 import com.elal.flightsdk.manager.LiveUpdateManager
+import com.elal.flightsdk.model.PromotionStatus
 import kotlinx.coroutines.delay
 
 @Composable
@@ -39,6 +44,17 @@ fun JourneyDemoScreen(viewModel: JourneyViewModel = viewModel()) {
     val isSimulating by viewModel.isSimulating.collectAsState()
     val errorMessage by viewModel.errorMessage.collectAsState()
     val watchdog by viewModel.watchdogFlow.collectAsState()
+    val isDelayed by viewModel.isDelayed.collectAsState()
+    val pillText by viewModel.pillTextFlow.collectAsState()
+    val promotionStatus by viewModel.promotionStatus.collectAsState()
+    val isLegacyFallback by viewModel.isLegacyFallback.collectAsState()
+    val isPlainScheduleChange by viewModel.isPlainScheduleChange.collectAsState()
+    val isStatusBadge by viewModel.isStatusBadge.collectAsState()
+    // Read once when the screen opens; the SDK refreshes it again on every start and stage change.
+    LaunchedEffect(Unit) { viewModel.refreshPromotionStatus() }
+    // After a language switch the activity is recreated with the new locale: re-post the stage in that language.
+    val locales = LocalConfiguration.current.locales
+    LaunchedEffect(locales) { viewModel.onLanguageApplied() }
 
     JourneyDemoContent(
         statusText = statusText,
@@ -54,7 +70,21 @@ fun JourneyDemoScreen(viewModel: JourneyViewModel = viewModel()) {
         onGeneralError = { viewModel.setGeneralError() },
         onSimulateDeparture = { viewModel.simulateJourney() },
         onSimulateArrival = { viewModel.simulateArrivalJourney() },
-        onDebugWatchdog = { viewModel.enableDebugWatchdog() }
+        onDebugWatchdog = { viewModel.enableDebugWatchdog() },
+        isDelayed = isDelayed,
+        onToggleDelay = { viewModel.toggleDelay() },
+        pillText = pillText,
+        promotionStatus = promotionStatus,
+        onDismiss = { viewModel.dismissLiveUpdate() },
+        onOpenPromotionSettings = { viewModel.openPromotionSettings() },
+        isLegacyFallback = isLegacyFallback,
+        onToggleLegacyFallback = { viewModel.toggleLegacyFallback() },
+        onToggleLanguage = { viewModel.toggleLanguage() },
+        onSimulateGateChange = { viewModel.simulateGateChange() },
+        isPlainScheduleChange = isPlainScheduleChange,
+        onToggleScheduleChangeStyle = { viewModel.toggleScheduleChangeStyle() },
+        isStatusBadge = isStatusBadge,
+        onToggleStatusBadge = { viewModel.toggleStatusBadge() }
     )
 }
 
@@ -74,7 +104,21 @@ fun JourneyDemoContent(
     onGeneralError: () -> Unit,
     onSimulateDeparture: () -> Unit,
     onSimulateArrival: () -> Unit,
-    onDebugWatchdog: () -> Unit
+    onDebugWatchdog: () -> Unit,
+    isDelayed: Boolean = false,
+    onToggleDelay: () -> Unit = {},
+    pillText: String? = null,
+    promotionStatus: PromotionStatus? = null,
+    onDismiss: () -> Unit = {},
+    onOpenPromotionSettings: () -> Unit = {},
+    isLegacyFallback: Boolean = false,
+    onToggleLegacyFallback: () -> Unit = {},
+    onToggleLanguage: () -> Unit = {},
+    onSimulateGateChange: () -> Unit = {},
+    isPlainScheduleChange: Boolean = false,
+    onToggleScheduleChangeStyle: () -> Unit = {},
+    isStatusBadge: Boolean = false,
+    onToggleStatusBadge: () -> Unit = {}
 ) {
     Scaffold(
         topBar = {
@@ -91,6 +135,8 @@ fun JourneyDemoContent(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
+                // The group 4–6 controls made the screen taller than a phone; scroll so every button is reachable.
+                .verticalScroll(rememberScrollState())
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(24.dp)
         ) {
@@ -123,14 +169,26 @@ fun JourneyDemoContent(
                         fontSize = 14.sp
                     )
                 }
+                // What the SDK put in the status-bar pill, to compare with the device
+                if (isActivityActive) {
+                    Text(
+                        text = if (pillText != null) {
+                            stringResource(R.string.demo_pill_text, pillText)
+                        } else {
+                            stringResource(R.string.demo_pill_icon_only)
+                        },
+                        color = Color.White.copy(alpha = 0.8f),
+                        fontSize = 14.sp
+                    )
+                }
             }
 
             // Control Buttons
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Button(
+                    // Always enabled (task 6.1): starting while a journey is active replaces it.
                     onClick = onStartActivity,
                     modifier = Modifier.fillMaxWidth(),
-                    enabled = !isActivityActive,
                     colors = ButtonDefaults.buttonColors(containerColor = Green)
                 ) {
                     Text(stringResource(R.string.start_activity))
@@ -177,6 +235,61 @@ fun JourneyDemoContent(
                 }
             }
 
+            // Delay toggle: switches the pill between on-time blue and delayed amber
+            Button(
+                onClick = onToggleDelay,
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = if (isDelayed) Yellow else ElAlBlue,
+                    contentColor = if (isDelayed) Color.Black else Color.White
+                )
+            ) {
+                Text(stringResource(if (isDelayed) R.string.delay_toggle_on else R.string.delay_toggle_off))
+            }
+
+            // Schedule changes (task 3b): gate change and the strike style
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                OutlinedButton(onClick = onSimulateGateChange, modifier = Modifier.weight(1f), enabled = isActivityActive) {
+                    Text(stringResource(R.string.demo_gate_change))
+                }
+                OutlinedButton(onClick = onToggleScheduleChangeStyle, modifier = Modifier.weight(1f)) {
+                    Text(
+                        stringResource(
+                            if (isPlainScheduleChange) R.string.demo_strike_style_text else R.string.demo_strike_style_span
+                        )
+                    )
+                }
+            }
+
+            // Spike: coloured status badge as the large icon
+            OutlinedButton(onClick = onToggleStatusBadge, modifier = Modifier.fillMaxWidth()) {
+                Text(stringResource(if (isStatusBadge) R.string.demo_status_badge_on else R.string.demo_status_badge_off))
+            }
+
+            // Simulates the user swiping the Live Update away (group 4: no repost afterwards)
+            Button(
+                onClick = onDismiss,
+                modifier = Modifier.fillMaxWidth(),
+                enabled = isActivityActive,
+                colors = ButtonDefaults.buttonColors(containerColor = Red)
+            ) {
+                Text(stringResource(R.string.demo_dismiss))
+            }
+
+            if (promotionStatus != null) {
+                PromotionCard(status = promotionStatus, onOpenSettings = onOpenPromotionSettings)
+            }
+
+            // Demo language (task 6.5): the SDK strings and the sample labels follow it
+            OutlinedButton(onClick = onToggleLanguage, modifier = Modifier.fillMaxWidth()) {
+                Text(stringResource(R.string.demo_language_switch))
+            }
+
+            // Android 15 fallback (group 5): applies to the next start; no effect on Android 16+
+            OutlinedButton(onClick = onToggleLegacyFallback, modifier = Modifier.fillMaxWidth()) {
+                Text(stringResource(if (isLegacyFallback) R.string.demo_fallback_on else R.string.demo_fallback_off))
+            }
+
             // Watchdog countdown + debug button
             WatchdogCard(
                 watchdog = watchdog,
@@ -188,11 +301,11 @@ fun JourneyDemoContent(
             // Simulate Buttons
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Button(
+                    // Always enabled (task 6.1): tapping again restarts the simulation.
                     onClick = onSimulateDeparture,
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(56.dp),
-                    enabled = !isSimulating,
                     colors = ButtonDefaults.buttonColors(containerColor = ElAlBlue)
                 ) {
                     Text(
@@ -203,11 +316,11 @@ fun JourneyDemoContent(
                 }
 
                 Button(
+                    // Always enabled (task 6.1): tapping again restarts the simulation.
                     onClick = onSimulateArrival,
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(56.dp),
-                    enabled = !isSimulating,
                     colors = ButtonDefaults.buttonColors(containerColor = ElAlBlue)
                 ) {
                     Text(
@@ -245,6 +358,34 @@ fun JourneyDemoContent(
                     modifier = Modifier.padding(8.dp)
                 )
             }
+        }
+    }
+}
+
+/** Shows whether the system will promote the Live Update, with a shortcut to the setting that controls it. */
+@Composable
+private fun PromotionCard(status: PromotionStatus, onOpenSettings: () -> Unit) {
+    val label = when (status) {
+        PromotionStatus.ALLOWED -> R.string.demo_promotion_allowed
+        PromotionStatus.BLOCKED_BY_USER -> R.string.demo_promotion_blocked
+        PromotionStatus.NOTIFICATIONS_DISABLED -> R.string.demo_promotion_notifications_disabled
+        PromotionStatus.UNSUPPORTED -> R.string.demo_promotion_unsupported
+    }
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(text = stringResource(R.string.demo_promotion_title), fontSize = 14.sp, fontWeight = FontWeight.Medium)
+            Text(
+                text = stringResource(label),
+                fontSize = 14.sp,
+                color = if (status == PromotionStatus.ALLOWED) Green else Red
+            )
+        }
+        Button(onClick = onOpenSettings, colors = ButtonDefaults.buttonColors(containerColor = ElAlBlue)) {
+            Text(stringResource(R.string.demo_open_settings))
         }
     }
 }
