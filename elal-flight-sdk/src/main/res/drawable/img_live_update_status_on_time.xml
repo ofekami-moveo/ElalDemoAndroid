@@ -2,7 +2,7 @@
 <!--
     Status badge "ON TIME" for the large icon (spike, 2026-11-16). Imported from the user's SVG (53x17); the SVG's
     rounded <rect> (52.2072 x 16.4337, rx 8.21687) is written as a path.
-    English only; a Hebrew variant goes in drawable-iw/ with the same name.
+    Hebrew variant: drawable-iw/ (same name).
 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="53dp"

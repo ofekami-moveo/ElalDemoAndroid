@@ -250,6 +250,8 @@ com.elal.demoapp.debug.NEXT_STAGE -n com.elal.demoapp/.debug.DebugNextStageRecei
   canvas at 2× (`BadgeFit` + `BadgeFitTest`, expected 55 tests)
 - [x] Re-check on the Pixel and the S25+: looks good (user, 2026-11-16); 55/55 tests
 - [ ] PM approval (optional feature, off by default); lock screen + dumpsys `PROMOTED_ONGOING` with the badge on
+- [x] Hebrew "ON TIME" badge from the user's SVG: `drawable-iw/img_live_update_status_on_time.xml` (2026-11-18)
+- [ ] Hebrew "DELAYED" badge: waiting on design (Hebrew falls back to the English badge); device check of the Hebrew badge
 
 #### Fix: bar contrast on dark cards (2026-11-16)
 

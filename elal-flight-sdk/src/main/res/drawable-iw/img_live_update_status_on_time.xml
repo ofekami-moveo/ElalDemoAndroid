@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Status badge "ON TIME" in Hebrew ("בזמן") for the large icon (spike). Imported from the user's SVG (32x15,
+    2026-11-18); the SVG's rounded <rect> (31.3397 x 14.0998, rx 7.0499) is written as a path.
+    No Hebrew "DELAYED" yet: Hebrew falls back to the English drawable/img_live_update_status_delayed.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="32dp"
+    android:height="15dp"
+    android:viewportWidth="32"
+    android:viewportHeight="15">
+    <path
+        android:fillColor="@color/live_update_status_on_time_background"
+        android:pathData="M7.0499,0H24.2898A7.0499,7.0499 0,0 1,31.3397 7.0499A7.0499,7.0499 0,0 1,24.2898 14.0998H7.0499A7.0499,7.0499 0,0 1,0 7.0499A7.0499,7.0499 0,0 1,7.0499 0Z" />
+    <path
+        android:fillColor="@color/live_update_status_text"
+        android:pathData="M7.06269 11.7779V5.5319H6.40569V4.6769H8.00769V11.7779H7.06269ZM12.5863 10.1039C12.1993 10.1039 11.8573 10.0679 11.5693 10.0139L11.7403 9.1769C11.9563 9.2309 12.3163 9.2669 12.5683 9.2669C13.5673 9.2669 14.3503 8.4839 14.3503 7.3499C14.3503 6.2789 13.6663 5.4419 12.7753 5.4419C11.9473 5.4419 11.3533 5.9279 11.0293 7.0079L10.1113 10.0499H9.1393L10.1473 6.8009L9.0133 4.6769H10.0213L10.6693 6.0359C11.1193 5.1359 11.8933 4.6229 12.8743 4.6229C14.1973 4.6229 15.2863 5.8019 15.2863 7.3589C15.2863 8.8979 14.1613 10.1039 12.5863 10.1039ZM17.8563 10.0499L17.1363 5.5319H16.1463V4.6769H19.4583V5.5319H18.0723L18.8013 10.0499H17.8563ZM20.3383 10.0499V9.1949H23.2812V7.0979C23.2812 5.8109 22.8312 5.5319 21.8143 5.5319H20.3383V4.6769H21.9223C23.5693 4.6769 24.2262 5.3249 24.2262 7.0799V9.1949H24.9912V10.0499H20.3383Z" />
+</vector>
